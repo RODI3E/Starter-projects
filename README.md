@@ -1,2 +1,2 @@
 # Starter-projects
-contains random intelligent appszwebsites ans systems
+contains random intelligent apps ,websites and systems
