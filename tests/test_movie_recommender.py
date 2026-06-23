@@ -29,6 +29,38 @@ class MovieRecommenderTests(unittest.TestCase):
         results = self.recommender.recommend_similar("Inception", top_n=1)
         self.assertEqual(results[0].title, "The Matrix")
 
+    # --- New tests for improved error handling ---
+
+    def test_empty_catalog_raises_error(self) -> None:
+        with self.assertRaises(ValueError):
+            MovieRecommender(catalog=[])
+
+    def test_recommend_invalid_top_n_raises_error(self) -> None:
+        with self.assertRaises(ValueError):
+            self.recommender.recommend(["Action"], top_n=0)
+        with self.assertRaises(ValueError):
+            self.recommender.recommend(["Action"], top_n=-1)
+
+    def test_recommend_invalid_min_rating_raises_error(self) -> None:
+        with self.assertRaises(ValueError):
+            self.recommender.recommend(["Action"], min_rating=11.0)
+        with self.assertRaises(ValueError):
+            self.recommender.recommend(["Action"], min_rating=-1.0)
+
+    def test_recommend_invalid_min_year_raises_error(self) -> None:
+        with self.assertRaises(ValueError):
+            self.recommender.recommend(["Action"], min_year=-5)
+
+    def test_recommend_similar_invalid_top_n_raises_error(self) -> None:
+        with self.assertRaises(ValueError):
+            self.recommender.recommend_similar("Inception", top_n=0)
+
+    def test_recommend_similar_empty_title_raises_error(self) -> None:
+        with self.assertRaises(ValueError):
+            self.recommender.recommend_similar("")
+        with self.assertRaises(ValueError):
+            self.recommender.recommend_similar("   ")
+
 
 if __name__ == "__main__":
     unittest.main()

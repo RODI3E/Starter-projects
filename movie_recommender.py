@@ -39,7 +39,9 @@ class MovieRecommender:
     """Recommend movies from a fixed catalog using weighted relevance scoring."""
 
     def __init__(self, catalog: Sequence[Movie] | None = None) -> None:
-        self.catalog = tuple(catalog or MOVIE_CATALOG)
+        if catalog is not None and len(catalog) == 0:
+            raise ValueError("catalog must not be empty; pass None to use the default catalog")
+        self.catalog = tuple(catalog if catalog is not None else MOVIE_CATALOG)
         self._titles = {movie.title.lower(): movie for movie in self.catalog}
 
     def recommend(
@@ -52,6 +54,13 @@ class MovieRecommender:
         exclude_titles: Iterable[str] | None = None,
     ) -> list[Movie]:
         """Return top-N recommendations ranked by relevance score."""
+        if top_n < 1:
+            raise ValueError(f"top_n must be at least 1, got {top_n}")
+        if min_rating is not None and not (0.0 <= min_rating <= 10.0):
+            raise ValueError(f"min_rating must be between 0 and 10, got {min_rating}")
+        if min_year is not None and min_year < 0:
+            raise ValueError(f"min_year must be non-negative, got {min_year}")
+
         normalized_genres = {genre.strip().lower() for genre in preferred_genres if genre.strip()}
         if not normalized_genres:
             raise ValueError("preferred_genres must contain at least one genre")
@@ -76,6 +85,11 @@ class MovieRecommender:
 
     def recommend_similar(self, title: str, top_n: int = 5) -> list[Movie]:
         """Recommend movies that share the strongest genre similarity with *title*."""
+        if top_n < 1:
+            raise ValueError(f"top_n must be at least 1, got {top_n}")
+        if not title or not title.strip():
+            raise ValueError("title must be a non-empty string")
+
         source = self._titles.get(title.lower().strip())
         if source is None:
             raise ValueError(f"Unknown title: {title!r}")
@@ -120,20 +134,44 @@ def _format_movies(movies: Sequence[Movie]) -> str:
 def main() -> None:
     recommender = MovieRecommender()
     print("Movie recommendation system")
-    genre_input = input("Enter preferred genres (comma-separated): ").strip()
+
+    try:
+        genre_input = input("Enter preferred genres (comma-separated): ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print("\nInput cancelled.")
+        return
+
     genres = [item.strip() for item in genre_input.split(",")]
-    min_year_raw = input("Minimum release year (optional): ").strip()
-    min_rating_raw = input("Minimum rating out of 10 (optional): ").strip()
 
-    min_year = int(min_year_raw) if min_year_raw else None
-    min_rating = float(min_rating_raw) if min_rating_raw else None
+    try:
+        min_year_raw = input("Minimum release year (optional): ").strip()
+        min_rating_raw = input("Minimum rating out of 10 (optional): ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print("\nInput cancelled.")
+        return
 
-    recommendations = recommender.recommend(
-        genres,
-        min_year=min_year,
-        min_rating=min_rating,
-        top_n=5,
-    )
+    try:
+        min_year = int(min_year_raw) if min_year_raw else None
+    except ValueError:
+        print(f"Error: '{min_year_raw}' is not a valid year. Please enter an integer.")
+        return
+
+    try:
+        min_rating = float(min_rating_raw) if min_rating_raw else None
+    except ValueError:
+        print(f"Error: '{min_rating_raw}' is not a valid rating. Please enter a number between 0 and 10.")
+        return
+
+    try:
+        recommendations = recommender.recommend(
+            genres,
+            min_year=min_year,
+            min_rating=min_rating,
+            top_n=5,
+        )
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        return
 
     print("\nTop recommendations:")
     print(_format_movies(recommendations))
