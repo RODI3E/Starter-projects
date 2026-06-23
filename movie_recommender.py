@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable, Sequence
 
+from utils import jaccard_similarity, normalize_genres, normalize_title, top_n_by_score
+
 
 @dataclass(frozen=True)
 class Movie:
@@ -40,7 +42,7 @@ class MovieRecommender:
 
     def __init__(self, catalog: Sequence[Movie] | None = None) -> None:
         self.catalog = tuple(catalog or MOVIE_CATALOG)
-        self._titles = {movie.title.lower(): movie for movie in self.catalog}
+        self._titles = {normalize_title(movie.title): movie for movie in self.catalog}
 
     def recommend(
         self,
@@ -52,53 +54,49 @@ class MovieRecommender:
         exclude_titles: Iterable[str] | None = None,
     ) -> list[Movie]:
         """Return top-N recommendations ranked by relevance score."""
-        normalized_genres = {genre.strip().lower() for genre in preferred_genres if genre.strip()}
-        if not normalized_genres:
+        normalized = normalize_genres(preferred_genres)
+        if not normalized:
             raise ValueError("preferred_genres must contain at least one genre")
 
-        excluded = {title.lower().strip() for title in (exclude_titles or []) if title.strip()}
+        excluded = {normalize_title(t) for t in (exclude_titles or []) if t.strip()}
 
         scored: list[tuple[float, Movie]] = []
         for movie in self.catalog:
-            if movie.title.lower() in excluded:
+            if normalize_title(movie.title) in excluded:
                 continue
             if min_year is not None and movie.year < min_year:
                 continue
             if min_rating is not None and movie.rating < min_rating:
                 continue
 
-            score = self._score_movie(movie, normalized_genres)
+            score = self._score_movie(movie, normalized)
             if score > 0:
                 scored.append((score, movie))
 
-        scored.sort(key=lambda item: (item[0], item[1].rating, item[1].year), reverse=True)
-        return [movie for _, movie in scored[:top_n]]
+        return top_n_by_score(scored, top_n, tiebreakers=("rating", "year"))
 
     def recommend_similar(self, title: str, top_n: int = 5) -> list[Movie]:
         """Recommend movies that share the strongest genre similarity with *title*."""
-        source = self._titles.get(title.lower().strip())
+        source = self._titles.get(normalize_title(title))
         if source is None:
             raise ValueError(f"Unknown title: {title!r}")
 
         similarities: list[tuple[float, Movie]] = []
-        source_genres = set(g.lower() for g in source.genres)
+        source_genres = normalize_genres(source.genres)
         for movie in self.catalog:
             if movie.title == source.title:
                 continue
 
-            target_genres = set(g.lower() for g in movie.genres)
-            overlap = len(source_genres & target_genres)
-            union = len(source_genres | target_genres)
-            jaccard = overlap / union if union else 0.0
+            target_genres = normalize_genres(movie.genres)
+            jaccard = jaccard_similarity(source_genres, target_genres)
             weighted = jaccard * 0.8 + (movie.rating / 10) * 0.2
             similarities.append((weighted, movie))
 
-        similarities.sort(key=lambda item: (item[0], item[1].rating), reverse=True)
-        return [movie for _, movie in similarities[:top_n]]
+        return top_n_by_score(similarities, top_n, tiebreakers=("rating",))
 
     @staticmethod
     def _score_movie(movie: Movie, preferred_genres: set[str]) -> float:
-        movie_genres = {genre.lower() for genre in movie.genres}
+        movie_genres = normalize_genres(movie.genres)
         genre_overlap = len(movie_genres & preferred_genres)
         if genre_overlap == 0:
             return 0.0
