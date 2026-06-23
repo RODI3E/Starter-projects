@@ -52,6 +52,9 @@ class MovieRecommender:
         exclude_titles: Iterable[str] | None = None,
     ) -> list[Movie]:
         """Return top-N recommendations ranked by relevance score."""
+        if top_n < 1:
+            raise ValueError("top_n must be a positive integer")
+
         normalized_genres = {genre.strip().lower() for genre in preferred_genres if genre.strip()}
         if not normalized_genres:
             raise ValueError("preferred_genres must contain at least one genre")
@@ -76,6 +79,9 @@ class MovieRecommender:
 
     def recommend_similar(self, title: str, top_n: int = 5) -> list[Movie]:
         """Recommend movies that share the strongest genre similarity with *title*."""
+        if top_n < 1:
+            raise ValueError("top_n must be a positive integer")
+
         source = self._titles.get(title.lower().strip())
         if source is None:
             raise ValueError(f"Unknown title: {title!r}")
@@ -117,6 +123,30 @@ def _format_movies(movies: Sequence[Movie]) -> str:
     return "\n".join(lines) if lines else "No recommendations found."
 
 
+def _parse_year(raw: str) -> int | None:
+    if not raw:
+        return None
+    try:
+        year = int(raw)
+    except ValueError:
+        raise SystemExit(f"Error: '{raw}' is not a valid year.")
+    if year < 1888 or year > 2100:
+        raise SystemExit(f"Error: year {year} is out of reasonable range (1888-2100).")
+    return year
+
+
+def _parse_rating(raw: str) -> float | None:
+    if not raw:
+        return None
+    try:
+        rating = float(raw)
+    except ValueError:
+        raise SystemExit(f"Error: '{raw}' is not a valid rating.")
+    if rating < 0.0 or rating > 10.0:
+        raise SystemExit(f"Error: rating {rating} is out of range (0.0-10.0).")
+    return rating
+
+
 def main() -> None:
     recommender = MovieRecommender()
     print("Movie recommendation system")
@@ -125,15 +155,18 @@ def main() -> None:
     min_year_raw = input("Minimum release year (optional): ").strip()
     min_rating_raw = input("Minimum rating out of 10 (optional): ").strip()
 
-    min_year = int(min_year_raw) if min_year_raw else None
-    min_rating = float(min_rating_raw) if min_rating_raw else None
+    min_year = _parse_year(min_year_raw)
+    min_rating = _parse_rating(min_rating_raw)
 
-    recommendations = recommender.recommend(
-        genres,
-        min_year=min_year,
-        min_rating=min_rating,
-        top_n=5,
-    )
+    try:
+        recommendations = recommender.recommend(
+            genres,
+            min_year=min_year,
+            min_rating=min_rating,
+            top_n=5,
+        )
+    except ValueError as exc:
+        raise SystemExit(f"Error: {exc}")
 
     print("\nTop recommendations:")
     print(_format_movies(recommendations))
